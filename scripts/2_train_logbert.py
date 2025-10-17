@@ -255,7 +255,7 @@ def main() -> None:
             super().__init__(*args, **kwargs)
             self.class_weights = class_weights
 
-        def compute_loss(self, model, inputs, return_outputs=False):
+        def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
             outputs = model(**inputs)
             labels = inputs["labels"]
 
