@@ -42,14 +42,29 @@ This generates `data/all_jobs.jsonl`, `data/train.jsonl`, `data/test.jsonl`, and
 
 ## Training
 
-Download a BERT checkpoint (e.g. `bert-base-uncased`) if you are working offline and pass its local path via `--model-name`. Then run:
+Download the base encoder once (skip when `models/bert-base-uncased` already exists):
+
+```bash
+python scripts/0_download_checkpoint.py \
+    --model bert-base-uncased \
+    --target-dir models/bert-base-uncased \
+    --skip-existing
+```
+
+Then run the fine-tuning script:
 
 ```bash
 python scripts/2_train_logbert.py \
     --train-data data/train.jsonl \
     --eval-data data/test.jsonl \
-    --model-name bert-base-uncased \
-    --output-dir model
+    --model-name models/bert-base-uncased \
+    --output-dir model \
+    --epochs 5 \
+    --batch-size 16 \
+    --learning-rate 3e-5 \
+    --max-length 384 \
+    --warmup-ratio 0.1 \
+    --weight-decay 0.01
 ```
 
 Adjust hyperparameters such as `--epochs`, `--batch-size`, or `--max-length` as needed.
