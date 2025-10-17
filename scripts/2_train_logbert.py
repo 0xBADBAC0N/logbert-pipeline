@@ -266,18 +266,21 @@ def main() -> None:
                 logits = outputs.logits
                 base_loss = getattr(outputs, "loss", None)
 
+            module = getattr(model, "module", model)
+            num_labels = module.config.num_labels if hasattr(module, "config") else logits.shape[-1]
+
             if self.class_weights is not None:
                 weight = self.class_weights.to(logits.device)
                 loss_fct = torch.nn.CrossEntropyLoss(weight=weight)
                 loss = loss_fct(
-                    logits.view(-1, model.config.num_labels),
+                    logits.view(-1, num_labels),
                     labels.view(-1),
                 )
             else:
                 loss = base_loss
                 if loss is None:
                     loss = F.cross_entropy(
-                        logits.view(-1, model.config.num_labels),
+                        logits.view(-1, num_labels),
                         labels.view(-1),
                     )
 
