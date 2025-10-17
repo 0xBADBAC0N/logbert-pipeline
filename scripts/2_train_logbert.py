@@ -13,10 +13,12 @@ import argparse
 import inspect
 import json
 import logging
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List
 
 import torch
+import torch.nn.functional as F
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from torch.utils.data import Dataset
 from transformers import (
@@ -99,6 +101,11 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.01,
         help="Weight decay to apply during optimization.",
+    )
+    parser.add_argument(
+        "--class-balance",
+        action="store_true",
+        help="Apply inverse-frequency class weights to the loss to counter label imbalance.",
     )
     return parser.parse_args()
 
@@ -192,6 +199,28 @@ def main() -> None:
 
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    class_weights_tensor: torch.Tensor | None = None
+    if args.class_balance:
+        label_counts = Counter(train_dataset.labels)
+        if len(label_counts) < 2 or min(label_counts.values()) == 0:
+            LOGGER.warning(
+                "Class balancing requested, but at least one class is missing in the training data. Skipping weighting."
+            )
+        else:
+            num_classes = len(label_counts)
+            total = sum(label_counts.values())
+            weights = []
+            for class_id in range(num_classes):
+                count = label_counts.get(class_id, 0)
+                weight = 0.0 if count == 0 else total / (num_classes * count)
+                weights.append(weight)
+            class_weights_tensor = torch.tensor(weights, dtype=torch.float)
+            LOGGER.info(
+                "Applying class weights to loss (counts=%s, weights=%s)",
+                dict(label_counts),
+                [round(w, 4) for w in class_weights_tensor.tolist()],
+            )
+
     logging_steps = max(1, len(train_dataset) // args.batch_size // 2)
 
     training_kwargs = dict(
@@ -221,7 +250,40 @@ def main() -> None:
 
     training_args = TrainingArguments(**training_kwargs)
 
-    trainer = Trainer(
+    class WeightedTrainer(Trainer):
+        def __init__(self, *args, class_weights=None, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.class_weights = class_weights
+
+        def compute_loss(self, model, inputs, return_outputs=False):
+            outputs = model(**inputs)
+            labels = inputs["labels"]
+
+            if isinstance(outputs, dict):
+                logits = outputs["logits"]
+                base_loss = outputs.get("loss")
+            else:
+                logits = outputs.logits
+                base_loss = getattr(outputs, "loss", None)
+
+            if self.class_weights is not None:
+                weight = self.class_weights.to(logits.device)
+                loss_fct = torch.nn.CrossEntropyLoss(weight=weight)
+                loss = loss_fct(
+                    logits.view(-1, model.config.num_labels),
+                    labels.view(-1),
+                )
+            else:
+                loss = base_loss
+                if loss is None:
+                    loss = F.cross_entropy(
+                        logits.view(-1, model.config.num_labels),
+                        labels.view(-1),
+                    )
+
+            return (loss, outputs) if return_outputs else loss
+
+    trainer = WeightedTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
@@ -229,6 +291,7 @@ def main() -> None:
         tokenizer=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
+        class_weights=class_weights_tensor,
     )
 
     LOGGER.info("Starting training …")

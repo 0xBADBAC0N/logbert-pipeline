@@ -64,10 +64,12 @@ python scripts/2_train_logbert.py \
     --learning-rate 3e-5 \
     --max-length 384 \
     --warmup-ratio 0.1 \
-    --weight-decay 0.01
+    --weight-decay 0.01 \
+    --class-balance
 ```
 
 Adjust hyperparameters such as `--epochs`, `--batch-size`, or `--max-length` as needed.
+`--class-balance` activates inverse-frequency weighting in the loss so the rare failure class contributes proportionally during training.
 
 ## Prediction
 
