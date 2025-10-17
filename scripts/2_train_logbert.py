@@ -73,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--epochs",
         type=float,
-        default=3.0,
+        default=5.0,
         help="Number of training epochs.",
     )
     parser.add_argument(
