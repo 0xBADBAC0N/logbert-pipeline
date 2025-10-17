@@ -14,6 +14,7 @@ import inspect
 import json
 import logging
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List
 
@@ -106,6 +107,17 @@ def parse_args() -> argparse.Namespace:
         "--class-balance",
         action="store_true",
         help="Apply inverse-frequency class weights to the loss to counter label imbalance.",
+    )
+    parser.add_argument(
+        "--metrics-file",
+        type=Path,
+        default=None,
+        help="Optional path to store training/evaluation metrics as JSON.",
+    )
+    parser.add_argument(
+        "--skip-save",
+        action="store_true",
+        help="Skip saving model and tokenizer checkpoints after training.",
     )
     return parser.parse_args()
 
@@ -298,16 +310,42 @@ def main() -> None:
     )
 
     LOGGER.info("Starting training …")
-    trainer.train()
+    train_result = trainer.train()
 
     LOGGER.info("Evaluating best checkpoint …")
-    metrics = trainer.evaluate()
-    for key, value in metrics.items():
+    eval_metrics = trainer.evaluate()
+    for key, value in eval_metrics.items():
         LOGGER.info("  %s = %.4f", key, value)
 
-    LOGGER.info("Saving model to %s", args.output_dir)
-    trainer.save_model()
-    tokenizer.save_pretrained(args.output_dir)
+    final_metrics: Dict[str, object] = {}
+
+    def merge_metrics(source: Dict[str, object], prefix: str) -> None:
+        for key, value in source.items():
+            if key.startswith(f"{prefix}_"):
+                final_metrics[key] = value
+            else:
+                final_metrics[f"{prefix}_{key}"] = value
+
+    train_metrics = train_result.metrics or {}
+    if train_metrics:
+        merge_metrics(train_metrics, "train")
+    if eval_metrics:
+        merge_metrics(eval_metrics, "eval")
+    final_metrics["best_model_checkpoint"] = trainer.state.best_model_checkpoint or ""
+    final_metrics["metrics_timestamp"] = datetime.utcnow().isoformat()
+
+    if args.metrics_file:
+        args.metrics_file.parent.mkdir(parents=True, exist_ok=True)
+        with args.metrics_file.open("w", encoding="utf-8") as handle:
+            json.dump(final_metrics, handle, indent=2)
+        LOGGER.info("Stored metrics at %s", args.metrics_file)
+
+    if args.skip_save:
+        LOGGER.info("Skipping model checkpoint save (per --skip-save).")
+    else:
+        LOGGER.info("Saving model to %s", args.output_dir)
+        trainer.save_model()
+        tokenizer.save_pretrained(args.output_dir)
 
 
 if __name__ == "__main__":

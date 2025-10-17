@@ -70,6 +70,7 @@ python scripts/2_train_logbert.py \
 
 Adjust hyperparameters such as `--epochs`, `--batch-size`, or `--max-length` as needed.
 `--class-balance` activates inverse-frequency weighting in the loss so the rare failure class contributes proportionally during training.
+Optional flags: `--metrics-file <path>` writes a JSON summary of train/eval metrics, and `--skip-save` prevents checkpoint export (useful for large sweeps).
 
 ## Prediction
 
@@ -81,3 +82,18 @@ python scripts/3_predict_logbert.py \
 ```
 
 Each output record contains the original metadata, the predicted status, and the failure probability.
+
+## Hyperparameter sweeps
+
+```bash
+python scripts/4_sweep_logbert.py \
+    --gpus 0,1,2,3 \
+    --max-parallel 4 \
+    --learning-rates 3e-5 2e-5 \
+    --max-lengths 384 512 \
+    --seeds 42 1337 2025
+```
+
+Runs are launched with one GPU each; temporary run folders live under `model/seed*_lr*_bs*_ml*_ep*` and are removed once metrics are collected (retain them with `--keep-artifacts`). Use `--dry-run` to inspect commands only or `--extra-args --gradient-accumulation-steps 2` to pass additional flags through.
+
+Each completed run appends its configuration and train/eval metrics to `model/results.csv`. For a broader search space (thousands of combinations) add `--preset extensive`.
