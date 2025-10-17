@@ -194,9 +194,13 @@ def build_param_grid(args: argparse.Namespace) -> Iterable[Dict[str, object]]:
 
 
 def format_run_name(params: Dict[str, object]) -> str:
-    return "seed{seed}_lr{learning_rate:g}_bs{batch_size}_ml{max_length}_ep{epochs:g}".format(
-        **params
+    base = (
+        "seed{seed}_lr{learning_rate:g}_bs{batch_size}_ml{max_length}"
+        "_ep{epochs:g}_wr{warmup_ratio:g}_wd{weight_decay:g}".format(**params)
     )
+    if "run_index" in params:
+        return f"{params['run_index']:04d}_{base}"
+    return base
 
 
 def launch_run(
@@ -291,6 +295,7 @@ BASE_COLUMNS = [
     "status",
     "timestamp",
     "preset",
+    "run_index",
 ]
 PARAM_COLUMNS = [
     "param_epochs",
@@ -372,6 +377,8 @@ def main() -> None:
         args.seeds = [13, 37, 42, 128, 314, 733, 1337]
 
     jobs = list(build_param_grid(args))
+    for idx, job in enumerate(jobs):
+        job["run_index"] = idx
     if not jobs:
         print("No parameter combinations generated; exiting.")
         return
@@ -451,6 +458,7 @@ def main() -> None:
                     "status": status,
                     "timestamp": datetime.utcnow().isoformat(),
                     "preset": args.preset,
+                    "run_index": job.get("run_index", ""),
                     "param_epochs": job["epochs"],
                     "param_batch_size": job["batch_size"],
                     "param_learning_rate": job["learning_rate"],
