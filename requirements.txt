@@ -4,5 +4,5 @@ transformers==4.57.1
 accelerate>=0.26.0
 pandas==2.3.3
 scikit-learn==1.7.2
-numpy==2.3.4
+numpy==2.2.6
 tqdm==4.67.1
