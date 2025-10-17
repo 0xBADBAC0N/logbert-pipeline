@@ -8,12 +8,14 @@ This folder contains a minimal workflow to prepare Spark executor logs for LogBE
 sudo apt update
 sudo apt install -y git git-lfs python3-venv python3-pip unzip
 git lfs install --system
+sudo apt install -y ubuntu-drivers-common
+sudo ubuntu-drivers autoinstall
+sudo reboot
+
 git clone https://github.com/0xBADBAC0N/logbert-pipeline.git
 cd logbert-pipeline
 git lfs pull
 ```
-
-AWS Deep Learning AMIs ship with the correct NVIDIA drivers. If you start from a plain Ubuntu image, install the recommended `nvidia-driver` package (`sudo ubuntu-drivers autoinstall`) and reboot once before training.
 
 ## Setup
 
