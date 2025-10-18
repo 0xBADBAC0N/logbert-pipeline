@@ -60,20 +60,24 @@ python scripts/2_train_logbert.py \
     --train-data data/train.jsonl \
     --eval-data data/test.jsonl \
     --model-name models/bert-base-uncased \
-    --output-dir model \
-    --epochs 5 \
-    --batch-size 16 \
-    --learning-rate 3e-5 \
-    --max-length 384 \
-    --warmup-ratio 0.1 \
+    --output-dir model/fold-0 \
+    --epochs 15 \
+    --batch-size 4 \
+    --learning-rate 2e-5 \
+    --max-length 256 \
+    --warmup-ratio 0 \
     --weight-decay 0.01 \
-    --class-balance
+    --class-balance \
+    --fold-index 0 \
+    --folds-dir data/folds \
+    --save-total-limit 1
 ```
 
 Adjust hyperparameters such as `--epochs`, `--batch-size`, or `--max-length` as needed.
 `--class-balance` activates inverse-frequency weighting in the loss so the rare failure class contributes proportionally during training.
 Optional flags: `--metrics-file <path>` writes a JSON summary of train/eval metrics, and `--skip-save` prevents checkpoint export (useful for large sweeps).
-To train on a specific fold, add `--fold-index <k>` (and optionally `--folds-dir` if you stored them elsewhere).
+`--save-total-limit` avoids filling the disk with intermediate checkpoints; increase it or set `<=0` to keep all.
+Change `--fold-index` (and the matching `--output-dir`) to iterate over additional folds.
 
 ## Prediction
 

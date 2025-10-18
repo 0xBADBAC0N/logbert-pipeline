@@ -116,6 +116,12 @@ def parse_args() -> argparse.Namespace:
         help="Weight decay to apply during optimization.",
     )
     parser.add_argument(
+        "--save-total-limit",
+        type=int,
+        default=1,
+        help="Maximum number of checkpoints to keep (<=0 keeps all).",
+    )
+    parser.add_argument(
         "--class-balance",
         action="store_true",
         help="Apply inverse-frequency class weights to the loss to counter label imbalance.",
@@ -272,6 +278,8 @@ def main() -> None:
         report_to="none",
         seed=args.seed,
     )
+    if args.save_total_limit and args.save_total_limit > 0:
+        training_kwargs["save_total_limit"] = args.save_total_limit
 
     # `eval_strategy` replaced `evaluation_strategy` in newer transformers releases.
     training_args_params = inspect.signature(TrainingArguments.__init__).parameters

@@ -5,6 +5,8 @@ Remove generated artifacts (datasets, model outputs, sweep results) to free disk
 By default the script deletes directories under:
   - data/ (excluding raw_data.zip)
   - model/
+  - models/
+  - raw_data/Spark/
   - logs and temporary run folders
 
 Use --dry-run to inspect what would be removed.
@@ -21,6 +23,8 @@ from typing import Iterable
 DEFAULT_PATHS = [
     Path("data"),
     Path("model"),
+    Path("models"),
+    Path("raw_data") / "Spark",
 ]
 
 
