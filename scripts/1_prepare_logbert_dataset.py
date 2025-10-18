@@ -23,7 +23,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold, train_test_split
 
 
 START_JOB_RE = re.compile(r"Starting job:\s*(.+)")
@@ -106,6 +106,18 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=42,
         help="Random seed for reproducible splitting.",
+    )
+    parser.add_argument(
+        "--k-folds",
+        type=int,
+        default=0,
+        help="Number of stratified folds to generate (>=2).",
+    )
+    parser.add_argument(
+        "--folds-dir",
+        type=Path,
+        default=None,
+        help="Optional directory for K-fold splits. Defaults to <output-dir>/folds.",
     )
     return parser.parse_args()
 
@@ -278,6 +290,41 @@ def main() -> None:
         "max_events": args.max_events,
         "label_mapping": {"finished": 0, "failed": 1},
     }
+    if args.k_folds and args.k_folds >= 2:
+        folds_dir = args.folds_dir or (args.output_dir / "folds")
+        folds_dir.mkdir(parents=True, exist_ok=True)
+        skf = StratifiedKFold(
+            n_splits=args.k_folds, shuffle=True, random_state=args.seed
+        )
+        fold_counts: List[Dict[str, int]] = []
+
+        for fold_idx, (fold_train_idx, fold_eval_idx) in enumerate(
+            skf.split(indices, labels)
+        ):
+            fold_path = folds_dir / f"fold_{fold_idx}"
+            fold_path.mkdir(parents=True, exist_ok=True)
+            train_file = fold_path / "train.jsonl"
+            eval_file = fold_path / "eval.jsonl"
+            write_jsonl(train_file, fold_train_idx)
+            write_jsonl(eval_file, fold_eval_idx)
+
+            fold_labels = [labels[i] for i in fold_eval_idx]
+            fold_counts.append(
+                {
+                    "fold": fold_idx,
+                    "train_size": len(fold_train_idx),
+                    "eval_size": len(fold_eval_idx),
+                    "eval_failed": int(sum(fold_labels)),
+                    "eval_success": int(len(fold_labels) - sum(fold_labels)),
+                }
+            )
+        metadata["k_folds"] = {
+            "count": args.k_folds,
+            "directory": str(folds_dir),
+            "fold_stats": fold_counts,
+        }
+        print(f"Generated {args.k_folds} stratified folds in {folds_dir}")
+
     with metadata_path.open("w", encoding="utf-8") as meta_file:
         json.dump(metadata, meta_file, indent=2)
 

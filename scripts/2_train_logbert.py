@@ -50,6 +50,18 @@ def parse_args() -> argparse.Namespace:
         help="Path to evaluation JSONL file (same format as train).",
     )
     parser.add_argument(
+        "--fold-index",
+        type=int,
+        default=None,
+        help="Use train/eval data from the specified stratified fold (overrides --train-data / --eval-data).",
+    )
+    parser.add_argument(
+        "--folds-dir",
+        type=Path,
+        default=Path("logbert_pipeline/data/folds"),
+        help="Directory containing fold_{k}/train.jsonl and eval.jsonl files.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("logbert_pipeline/model"),
@@ -189,8 +201,16 @@ def main() -> None:
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
     LOGGER.info("Loading datasets …")
-    train_entries = load_jsonl(args.train_data)
-    eval_entries = load_jsonl(args.eval_data)
+    train_path = args.train_data
+    eval_path = args.eval_data
+    if args.fold_index is not None:
+        fold_dir = (args.folds_dir / f"fold_{args.fold_index}").resolve()
+        train_path = fold_dir / "train.jsonl"
+        eval_path = fold_dir / "eval.jsonl"
+        LOGGER.info("Using fold %s (train=%s, eval=%s)", args.fold_index, train_path, eval_path)
+
+    train_entries = load_jsonl(train_path)
+    eval_entries = load_jsonl(eval_path)
 
     try:
         tokenizer = AutoTokenizer.from_pretrained(args.model_name)

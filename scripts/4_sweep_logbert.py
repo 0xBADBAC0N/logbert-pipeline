@@ -126,6 +126,19 @@ def parse_args() -> argparse.Namespace:
         help="Random seeds used for different runs.",
     )
     parser.add_argument(
+        "--folds",
+        type=int,
+        nargs="*",
+        default=None,
+        help="Optional list of fold indices to run. If omitted, uses standard train/test split.",
+    )
+    parser.add_argument(
+        "--folds-dir",
+        type=Path,
+        default=script_dir.parent / "data" / "folds",
+        help="Directory containing stratified folds.",
+    )
+    parser.add_argument(
         "--class-balance",
         action="store_true",
         default=True,
@@ -171,6 +184,7 @@ def build_param_grid(args: argparse.Namespace) -> Iterable[Dict[str, object]]:
         args.warmup_ratios,
         args.weight_decays,
         args.seeds,
+        args.folds if args.folds is not None else [None],
     )
 
     for (
@@ -181,6 +195,7 @@ def build_param_grid(args: argparse.Namespace) -> Iterable[Dict[str, object]]:
         warmup_ratio,
         weight_decay,
         seed,
+        fold_index,
     ) in sweep_iter:
         yield {
             "epochs": epochs,
@@ -190,6 +205,7 @@ def build_param_grid(args: argparse.Namespace) -> Iterable[Dict[str, object]]:
             "warmup_ratio": warmup_ratio,
             "weight_decay": weight_decay,
             "seed": seed,
+            "fold_index": fold_index,
         }
 
 
@@ -198,6 +214,9 @@ def format_run_name(params: Dict[str, object]) -> str:
         "seed{seed}_lr{learning_rate:g}_bs{batch_size}_ml{max_length}"
         "_ep{epochs:g}_wr{warmup_ratio:g}_wd{weight_decay:g}".format(**params)
     )
+    fold_index = params.get("fold_index")
+    if fold_index is not None:
+        base = f"{base}_fold{fold_index}"
     if "run_index" in params:
         return f"{params['run_index']:04d}_{base}"
     return base
@@ -212,6 +231,7 @@ def launch_run(
     base_output: Path,
     params: Dict[str, object],
     class_balance: bool,
+    folds_dir: Path,
     extra_args: Sequence[str],
     dry_run: bool,
 ) -> Tuple[subprocess.Popen | None, Path, Path, object]:
@@ -255,6 +275,15 @@ def launch_run(
 
     cmd.extend(["--metrics-file", str(metrics_path), "--skip-save"])
 
+    if params.get("fold_index") is not None:
+        cmd.extend(
+            [
+                "--fold-index",
+                str(params["fold_index"]),
+                "--folds-dir",
+                str(folds_dir),
+            ]
+        )
     if extra_args:
         cmd.extend(extra_args)
 
@@ -305,6 +334,7 @@ PARAM_COLUMNS = [
     "param_warmup_ratio",
     "param_weight_decay",
     "param_seed",
+    "param_fold_index",
 ]
 
 
@@ -385,6 +415,8 @@ def main() -> None:
 
     print(f"Planned runs: {len(jobs)} across GPUs {gpu_ids} (max parallel: {max_parallel})")
 
+    folds_dir_resolved = args.folds_dir.resolve()
+
     if args.dry_run:
         for job in jobs:
             launch_run(
@@ -392,10 +424,11 @@ def main() -> None:
                 args.train_script.resolve(),
                 args.train_data.resolve(),
                 args.eval_data.resolve(),
-                args.model_name,
+                model_name,
                 base_output,
                 job,
                 args.class_balance,
+                folds_dir_resolved,
                 args.extra_args,
                 True,
             )
@@ -419,6 +452,7 @@ def main() -> None:
                     base_output,
                     job,
                     args.class_balance,
+                    folds_dir_resolved,
                     args.extra_args,
                     False,
                 )
@@ -466,6 +500,7 @@ def main() -> None:
                     "param_warmup_ratio": job["warmup_ratio"],
                     "param_weight_decay": job["weight_decay"],
                     "param_seed": job["seed"],
+                    "param_fold_index": job.get("fold_index", ""),
                 }
                 for key, value in metrics_data.items():
                     row[key] = value
